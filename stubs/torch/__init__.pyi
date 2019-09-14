@@ -3,30 +3,18 @@ import pickle
 from typing import Any, Callable, Dict, IO, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union, overload
 
 import numpy as np
-import torch.autograd
-import torch.backends.cuda
-import torch.backends.mkl
-import torch.cuda
-import torch.distributions
-import torch.jit
-import torch.multiprocessing
-import torch.nn
-import torch.nn.functional
-import torch.onnx
-import torch.optim
-import torch.random
-import torch.sparse
-import torch.testing
-import torch.utils.backcompat
-from torch._tensor_str import set_printoptions
-from torch.random import get_rng_state, initial_seed, manual_seed, set_rng_state
-from torch.storage import _StorageBase
-from torch.tensor import Tensor as TensorBase
-from torch.utils.hooks import RemovableHandle
+from ._tensor_str import set_printoptions
+from .random import get_rng_state, initial_seed, set_rng_state
+from .storage import _StorageBase
+from .tensor import Tensor as TensorBase
+from .utils.hooks import RemovableHandle
+
+
+def manual_seed(seed: builtins.int): ...
 
 
 def load(f: Union[str, IO],
-         map_location: Optional[Union[Dict[str, str], str, torch.device, Callable[[str, str], str]]] = None,
+         map_location: Optional[Union[Dict[str, str], str, device, Callable[[str, str], str]]] = None,
          pickle_module=pickle, **pickle_load_args): ...
 
 
@@ -44,7 +32,7 @@ class device:
 
 class finfo:
 
-    def __init__(self, type: torch.dtype): ...
+    def __init__(self, type: dtype): ...
 
     @property
     def bits(self) -> builtins.int: ...
@@ -2664,11 +2652,8 @@ def sort(input: Tensor, dim: builtins.int = -1, descending: bool = False, *,
          out: Optional[Tuple[Tensor, LongTensor]] = None) -> Tuple[Tensor, LongTensor]: ...
 
 
-def split(input: Tensor, split_size: builtins.int, dim: builtins.int = 0) -> Tuple[Tensor, ...]: ...
-
-
-def split_with_sizes(input: Tensor, split_sizes: MaybeTuple[builtins.int],
-                     dim: builtins.int = 0) -> Tuple[Tensor, ...]: ...
+def split(tensor: Tensor, split_size_or_sections: MaybeList[builtins.int],
+          dim: builtins.int = 0) -> Tuple[Tensor, ...]: ...
 
 
 def sqrt(input: Tensor, *, out: Optional[Tensor] = None) -> Tensor: ...

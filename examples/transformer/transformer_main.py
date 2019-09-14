@@ -23,11 +23,8 @@ from typing import Any
 
 import torch
 import tqdm
+import texar.torch as tx
 
-import texar as tx
-from texar.data import Vocab
-
-from bleu_tool import bleu_wrapper
 from model import Transformer
 import utils.data_utils as data_utils
 import utils.utils as utils
@@ -35,19 +32,19 @@ import utils.utils as utils
 parser = argparse.ArgumentParser()
 
 parser.add_argument(
-    "--config_model", type=str, default="config_model",
+    "--config-model", type=str, default="config_model",
     help="The model config.")
 parser.add_argument(
-    "--config_data", type=str, default="config_iwslt15",
+    "--config-data", type=str, default="config_iwslt15",
     help="The dataset config.")
 parser.add_argument(
-    "--run_mode", type=str, default="train_and_evaluate",
+    "--run-mode", type=str, default="train_and_evaluate",
     help="Either train_and_evaluate or evaluate or test.")
 parser.add_argument(
-    "--model_dir", type=str, default="./outputs/",
+    "--output-dir", type=str, default="./outputs/",
     help="Path to save the trained model and logs.")
 parser.add_argument(
-    "--model_fn", type=str, default="best-model.ckpt",
+    "--output-filename", type=str, default="best-model.ckpt",
     help="Model filename to save the trained weights")
 
 args = parser.parse_args()
@@ -68,10 +65,11 @@ def main():
         device = None
 
     # Load data
-    vocab = Vocab(config_data.vocab_file)
+    vocab = tx.data.Vocab(config_data.vocab_file)
     data_hparams = {
-        # "batch_size" is ignored for train since we use dynamic batching
+        # "batch_size" is ignored for train since we use dynamic batching.
         "batch_size": config_data.test_batch_size,
+        "pad_id": vocab.pad_token_id,
         "bos_id": vocab.bos_token_id,
         "eos_id": vocab.eos_token_id,
     }
@@ -81,16 +79,17 @@ def main():
                 config_data.input_dir,
                 f"{config_data.filename_prefix}{split}.npy"
             ),
-            hparams=data_hparams,
-            device=device
+            # Only shuffle during training.
+            hparams={**data_hparams, "shuffle": split == "train"},
+            device=device,
         ) for split in ["train", "valid", "test"]
     }
     print(f"Training data size: {len(datasets['train'])}")
     beam_width = config_model.beam_width
 
     # Create logging
-    tx.utils.maybe_create_dir(args.model_dir)
-    logging_file = os.path.join(args.model_dir, "logging.txt")
+    tx.utils.maybe_create_dir(args.output_dir)
+    logging_file = os.path.join(args.output_dir, "logging.txt")
     logger = utils.get_logger(logging_file)
     print(f"logging file is saved in: {logging_file}")
 
@@ -123,7 +122,7 @@ def main():
         eval_data = datasets[mode]
         eval_iter = tx.data.DataIterator(eval_data)
         references, hypotheses = [], []
-        for batch in tqdm.tqdm(eval_iter, ncols=120, leave=tqdm_leave,
+        for batch in tqdm.tqdm(eval_iter, ncols=80, leave=tqdm_leave,
                                desc=f"Eval on {mode} set"):
             predictions = model(
                 encoder_input=batch.source,
@@ -136,27 +135,27 @@ def main():
 
             hypotheses.extend(h.tolist() for h in decoded_ids)
             references.extend(r.tolist() for r in batch.target_output)
-            hypotheses = utils.list_strip_eos(hypotheses, vocab.eos_token_id)
-            references = utils.list_strip_eos(references, vocab.eos_token_id)
+        hypotheses = utils.list_strip_eos(hypotheses, vocab.eos_token_id)
+        references = utils.list_strip_eos(references, vocab.eos_token_id)
 
         if mode == "valid":
             # Writes results to files to evaluate BLEU
             # For 'eval' mode, the BLEU is based on token ids (rather than
             # text tokens) and serves only as a surrogate metric to monitor
             # the training process
-            # TODO: Use texar.evals.bleu
-            fname = os.path.join(args.model_dir, "tmp.eval")
+            fname = os.path.join(args.output_dir, "tmp.eval")
             hwords, rwords = [], []
             for hyp, ref in zip(hypotheses, references):
                 hwords.append([str(y) for y in hyp])
                 rwords.append([str(y) for y in ref])
             hwords = tx.utils.str_join(hwords)
             rwords = tx.utils.str_join(rwords)
-            hyp_fn, ref_fn = tx.utils.write_paired_text(
+            hyp_file, ref_file = tx.utils.write_paired_text(
                 hwords, rwords, fname, mode="s",
                 src_fname_suffix="hyp", tgt_fname_suffix="ref",
             )
-            eval_bleu = bleu_wrapper(ref_fn, hyp_fn, case_sensitive=True)
+            eval_bleu = tx.evals.file_bleu(ref_file, hyp_file,
+                                           case_sensitive=True)
             logger.info("epoch: %d, eval_bleu %.4f", epoch, eval_bleu)
             print_fn(f"epoch: {epoch:d}, eval_bleu {eval_bleu:.4f}")
 
@@ -164,7 +163,7 @@ def main():
                 logger.info("epoch: %d, best bleu: %.4f", epoch, eval_bleu)
                 best_results["score"] = eval_bleu
                 best_results["epoch"] = epoch
-                model_path = os.path.join(args.model_dir, args.model_fn)
+                model_path = os.path.join(args.output_dir, args.output_filename)
                 logger.info("Saving model to %s", model_path)
                 print_fn(f"Saving model to {model_path}")
 
@@ -176,21 +175,21 @@ def main():
                 torch.save(states, model_path)
 
         elif mode == "test":
-            # For 'test' mode, together with the cmds in README.md, BLEU
+            # For 'test' mode, together with the commands in README.md, BLEU
             # is evaluated based on text tokens, which is the standard metric.
-            fname = os.path.join(args.model_dir, "test.output")
+            fname = os.path.join(args.output_dir, "test.output")
             hwords, rwords = [], []
             for hyp, ref in zip(hypotheses, references):
                 hwords.append(vocab.map_ids_to_tokens_py(hyp))
                 rwords.append(vocab.map_ids_to_tokens_py(ref))
             hwords = tx.utils.str_join(hwords)
             rwords = tx.utils.str_join(rwords)
-            hyp_fn, ref_fn = tx.utils.write_paired_text(
+            hyp_file, ref_file = tx.utils.write_paired_text(
                 hwords, rwords, fname, mode="s",
                 src_fname_suffix="hyp", tgt_fname_suffix="ref",
             )
-            logger.info("Test output written to file: %s", hyp_fn)
-            print_fn(f"Test output written to file: {hyp_fn}")
+            logger.info("Test output written to file: %s", hyp_file)
+            print_fn(f"Test output written to file: {hyp_file}")
 
     def _train_epoch(epoch: int):
         model.train()
@@ -200,7 +199,7 @@ def main():
         )
 
         progress = tqdm.tqdm(
-            train_iter, ncols=120,
+            train_iter, ncols=80,
             desc=f"Training epoch {epoch}",
         )
         for train_batch in progress:
@@ -219,12 +218,12 @@ def main():
             if step % config_data.display_steps == 0:
                 logger.info("step: %d, loss: %.4f", step, loss)
                 lr = optim.param_groups[0]["lr"]
-                progress.write(f"lr: {lr} step: {step}, loss: {loss:.4}")
+                progress.write(f"lr: {lr:.4e} step: {step}, loss: {loss:.4}")
             if step and step % config_data.eval_steps == 0:
                 _eval_epoch(epoch, mode="valid", print_fn=progress.write)
         progress.close()
 
-    model_path = os.path.join(args.model_dir, args.model_fn)
+    model_path = os.path.join(args.output_dir, args.output_filename)
 
     if args.run_mode == "train_and_evaluate":
         logger.info("Begin running with train_and_evaluate mode")

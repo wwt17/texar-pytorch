@@ -16,71 +16,57 @@
 
 import argparse
 import torch
-import sentencepiece as spm
 
-import xlnet
-import xlnet.model.decoder
-from texar.modules import TopKSampleEmbeddingHelper, TopPSampleEmbeddingHelper
+import texar.torch as tx
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--checkpoint', type=str, default=None,
-                    help="Checkpoint to load model weights from. Use "
-                         "`--pretrain_checkpoint` instead if loading XLNet "
-                         "pretrained checkpoint.")
-parser.add_argument('--pretrain_checkpoint', type=str,
-                    default="pretrained/xlnet_cased_L-24_H-1024_A-16/"
-                            "xlnet_model.ckpt",
-                    help="XLNet pretrained model checkpoint. Ignored if "
-                         "'--checkpoint' is specified.")
-parser.add_argument('--pretrain_model_dir', type=str,
-                    default="pretrained/xlnet_cased_L-24_H-1024_A-16",
-                    help="The directory of pretrained model, for loading "
-                         "vocabulary, etc.")
+                    help="Checkpoint to load model weights from.")
+parser.add_argument("--pretrained-model-name", type=str,
+                    default="xlnet-large-cased",
+                    help="The pre-trained model to load selected in the list "
+                         "of: `xlnet-base-cased`, `xlnet-large-cased`.")
 parser.add_argument('--seed', type=int, default=None, help="Random seed.")
 parser.add_argument('--nsamples', type=int, default=1,
                     help="Total number of samples to generate. Used in "
                          "non-interactive mode.")
-parser.add_argument('--batch_size', type=int, default=1,
+parser.add_argument('--batch-size', type=int, default=1,
                     help="The batch size of input.")
-parser.add_argument('--max_decoding_length', type=int, default=100,
+parser.add_argument('--max-decoding-length', type=int, default=100,
                     help="The maximun length of generated text.")
 parser.add_argument('--temperature', type=float, default=0.7,
                     help="Softmax temperature for top-k sample decoding. Must "
                          "be strictly greater than 0. Defaults to 0.7.")
-parser.add_argument('--top_k', type=int, default=40,
+parser.add_argument('--top-k', type=int, default=40,
                     help="The number of top most likely candidates to choose "
                          "from at each step. This is use "
                          "TopKSampleEmbeddingHelper for decoding. Ignored if "
                          "'p' is given.")
-parser.add_argument('--top_p', type=float, default=None,
+parser.add_argument('--top-p', type=float, default=None,
                     help="Select tokens with cumulative probability of at most "
-                         "'top_p' when arranged in decreasing order. This "
+                         "'top-p' when arranged in decreasing order. This "
                          "will use TopPSampleEmbeddingHelper for decoding.")
-parser.add_argument('--is_interactive', action='store_true',
+parser.add_argument('--interactive', action='store_true',
                     help="Interactive mode or not.")
-parser.add_argument('--sentence_piece', type=str,
-                    default="pretrained/xlnet_cased_L-24_H-1024_A-16/"
-                            "spiece.model",
-                    help="Location to load sentence piece model from.")
 
 args = parser.parse_args()
 
 
 def main():
-
-    pretrain_checkpoint = args.pretrain_checkpoint
-    sentence_piece_model = args.sentence_piece
     if torch.cuda.is_available():
         device = torch.device(torch.cuda.current_device())
     else:
         device = 'cpu'
 
-    model = xlnet.model.decoder.XLNetDecoder()
-    xlnet.model.load_from_tf_checkpoint(model, pretrain_checkpoint)
+    model = tx.modules.XLNetDecoder(
+        pretrained_model_name=args.pretrained_model_name)
+    if args.checkpoint is not None:
+        model.load_state_dict(torch.load(args.checkpoint, map_location=device))
+        print(f"Loaded checkpoint from {args.checkpoint}")
     model = model.to(device)
-    sp_model = spm.SentencePieceProcessor()
-    sp_model.Load(sentence_piece_model)
-    tokenize_fn = xlnet.data.create_tokenize_fn(sp_model, False)
+
+    tokenizer = tx.data.XLNetTokenizer(
+        pretrained_model_name=args.pretrained_model_name)
 
     # A lengthy padding text used to workaround lack of context for short
     # prompts. Refer to https://github.com/rusiaaman/XLNet-gen for the rationale
@@ -97,8 +83,9 @@ def main():
         and methodologies, creates a library of highly reusable modules and
         functionalities, and facilitates arbitrary model architectures and
         algorithmic paradigms. """
-    pad_ids = tokenize_fn(pad_txt)
-    pad_ids.append(xlnet.data.utils.EOD_ID)
+    pad_ids = tokenizer.map_text_to_id(pad_txt)
+    eod_id = tokenizer.map_token_to_id("<eod>")
+    pad_ids.append(eod_id)
 
     def split_by(xs, y):
         p = 0
@@ -114,25 +101,31 @@ def main():
     def sample(text: str, length: int = 100, n_samples=3, **kwargs):
         model.eval()
         text = text.replace("\n", "<eop>")
-        tokens = pad_ids + tokenize_fn(text)
+        tokens = pad_ids + tokenizer.map_text_to_id(text)
         tokens = torch.tensor(tokens, device=device).expand(n_samples, -1)
         if args.top_p:
             kwargs["p"] = args.top_p
-            decode_output, _ = model(tokens, max_decoding_length=length,
-                                     print_steps=True,
-                                     helper_type=TopPSampleEmbeddingHelper,
-                                     **kwargs)
+            decode_output, _ = model(
+                start_tokens=tokens,
+                end_token=eod_id,
+                max_decoding_length=length,
+                print_steps=True,
+                helper_type=tx.modules.TopPSampleEmbeddingHelper,
+                **kwargs)
         else:
             kwargs["top_k"] = args.top_k
-            decode_output, _ = model(tokens, max_decoding_length=length,
-                                     print_steps=True,
-                                     helper_type=TopKSampleEmbeddingHelper,
-                                     **kwargs)
+            decode_output, _ = model(
+                start_tokens=tokens,
+                end_token=eod_id,
+                max_decoding_length=length,
+                print_steps=True,
+                helper_type=tx.modules.TopKSampleEmbeddingHelper,
+                **kwargs)
         decode_samples = decode_output.sample_id.tolist()
         for idx, sample_tokens in enumerate(decode_samples):
             print(f"=== Sample {idx} ===")
-            output = "\n".join(sp_model.DecodeIds(xs) for xs in split_by(
-                sample_tokens, xlnet.data.utils.special_symbols["<eop>"]))
+            output = "\n".join(tokenizer.map_id_to_text(xs) for xs in split_by(
+                sample_tokens, tokenizer.map_token_to_id("<eop>")))
             print(output)
 
     nsamples = args.nsamples
@@ -141,9 +134,8 @@ def main():
     assert nsamples % batch_size == 0, (
         "nsamples must be dividable by batch_size")
 
-    if args.is_interactive:
+    if args.interactive:
         while True:
-
             try:
                 raw_text = input("Model input >>> ")
                 while not raw_text:

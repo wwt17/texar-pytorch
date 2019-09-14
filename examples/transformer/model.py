@@ -1,9 +1,22 @@
+# Copyright 2019 The Texar Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from typing import Optional
 
 import torch
 from torch import nn
-
-import texar as tx
+import texar.torch as tx
 
 
 class Transformer(nn.Module):
@@ -25,35 +38,36 @@ class Transformer(nn.Module):
 
         self.word_embedder = tx.modules.WordEmbedder(
             vocab_size=self.vocab_size,
-            hparams=self.config_model.emb,
-        )
+            hparams=self.config_model.emb)
         self.pos_embedder = tx.modules.SinusoidsPositionEmbedder(
             position_size=self.config_data.max_decoding_length,
-            hparams=self.config_model.position_embedder_hparams,
-        )
+            hparams=self.config_model.position_embedder_hparams)
 
         self.encoder = tx.modules.TransformerEncoder(
-            hparams=self.config_model.encoder
-        )
+            hparams=self.config_model.encoder)
         self.decoder = tx.modules.TransformerDecoder(
+            token_pos_embedder=self._embedding_fn,
             vocab_size=self.vocab_size,
             output_layer=self.word_embedder.embedding,
-            hparams=self.config_model.decoder,
-        )
+            hparams=self.config_model.decoder)
 
         self.smoothed_loss_func = LabelSmoothingLoss(
             label_confidence=self.config_model.loss_label_confidence,
             tgt_vocab_size=self.vocab_size,
-            ignore_index=0,
-        )
+            ignore_index=0)
 
-    def forward(  # type: ignore
-        self,
-        encoder_input: torch.Tensor,
-        decoder_input: Optional[torch.LongTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
-        beam_width: Optional[int] = None,
-    ):
+    def _embedding_fn(self, tokens: torch.LongTensor,
+                      positions: torch.LongTensor) -> torch.Tensor:
+        word_embed = self.word_embedder(tokens)
+        scale = self.config_model.hidden_dim ** 0.5
+        pos_embed = self.pos_embedder(positions)
+        return word_embed * scale + pos_embed
+
+    def forward(self,  # type: ignore
+                encoder_input: torch.Tensor,
+                decoder_input: Optional[torch.LongTensor] = None,
+                labels: Optional[torch.LongTensor] = None,
+                beam_width: Optional[int] = None):
         r"""Compute the maximum likelihood loss or perform decoding, depending
         on arguments.
 
@@ -87,57 +101,35 @@ class Transformer(nn.Module):
 
         # Position embedding (shared b/w source and target)
         src_seq_len = torch.full(
-            (batch_size,), encoder_input.size(1), dtype=torch.int32,
-            device=encoder_input.device
-        )
+            (batch_size,), encoder_input.size(1),
+            dtype=torch.int32, device=encoder_input.device)
 
         src_pos_embeds = self.pos_embedder(sequence_length=src_seq_len)
         src_input_embedding = src_word_embeds + src_pos_embeds
 
         encoder_output = self.encoder(
-            inputs=src_input_embedding, sequence_length=encoder_input_length
-        )
+            inputs=src_input_embedding, sequence_length=encoder_input_length)
 
         if decoder_input is not None and labels is not None:
             # enter the training logic
-
-            tgt_word_embeds = self.word_embedder(decoder_input)
-            tgt_word_embeds = (
-                tgt_word_embeds * self.config_model.hidden_dim ** 0.5
-            )
-            tgt_seq_len = decoder_input.new_full(
-                (batch_size,), decoder_input.size(1),
-            )
-
-            tgt_pos_embeds = self.pos_embedder(sequence_length=tgt_seq_len)
-
-            tgt_input_embedding = tgt_word_embeds + tgt_pos_embeds
 
             # For training
             outputs = self.decoder(
                 memory=encoder_output,
                 memory_sequence_length=encoder_input_length,
-                inputs=tgt_input_embedding,
+                inputs=decoder_input,
                 decoding_strategy="train_greedy",
             )
             label_lengths = (labels != 0).long().sum(dim=1)
             is_target = (labels != 0).float()
             mle_loss = self.smoothed_loss_func(
-                outputs.logits, labels, label_lengths
-            )
+                outputs.logits, labels, label_lengths)
             mle_loss = (mle_loss * is_target).sum() / is_target.sum()
             return mle_loss
 
         else:
             start_tokens = encoder_input.new_full(
-                (batch_size,), self.vocab.bos_token_id,
-            )
-
-            def _embedding_fn(x, y):
-                word_embed = self.word_embedder(x)
-                scale = self.config_model.hidden_dim ** 0.5
-                pos_embed = self.pos_embedder(y)
-                return word_embed * scale + pos_embed
+                (batch_size,), self.vocab.bos_token_id)
 
             predictions = self.decoder(
                 memory=encoder_output,
@@ -146,7 +138,6 @@ class Transformer(nn.Module):
                 length_penalty=self.config_model.length_penalty,
                 start_tokens=start_tokens,
                 end_token=self.vocab.eos_token_id,
-                embedding=_embedding_fn,
                 max_decoding_length=self.config_data.max_decoding_length,
                 decoding_strategy="infer_greedy",
             )
@@ -164,6 +155,7 @@ class LabelSmoothingLoss(nn.Module):
         tgt_vocab_size: the size of the final classification.
         ignore_index: The index in the vocabulary to ignore weight.
     """
+    one_hot: torch.Tensor
 
     def __init__(self, label_confidence, tgt_vocab_size, ignore_index=0):
         super().__init__()
@@ -178,12 +170,10 @@ class LabelSmoothingLoss(nn.Module):
         self.register_buffer("one_hot", one_hot.unsqueeze(0))
         self.confidence = label_confidence
 
-    def forward(  # type: ignore
-        self,
-        output: torch.Tensor,
-        target: torch.Tensor,
-        label_lengths: torch.LongTensor,
-    ) -> torch.Tensor:
+    def forward(self,  # type: ignore
+                output: torch.Tensor,
+                target: torch.Tensor,
+                label_lengths: torch.LongTensor) -> torch.Tensor:
         r"""Compute the label smoothing loss.
 
         Args:

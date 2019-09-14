@@ -2,7 +2,7 @@
 """
 import copy
 
-import texar as tx
+import texar.torch as tx
 
 random_seed = 1234
 
@@ -34,9 +34,7 @@ encoder = {
         "type": "variance_scaling_initializer",
         "kwargs": {"factor": 1.0, "mode": "FAN_AVG", "uniform": True},
     },
-    "poswise_feedforward":
-        tx.modules.encoders.transformer_encoder
-        .default_transformer_poswise_net_hparams(
+    "poswise_feedforward": tx.modules.default_transformer_poswise_net_hparams(
         input_dim=hidden_dim,
         output_dim=hidden_dim
     ),

@@ -4,24 +4,55 @@
 Data
 *******
 
+Tokenizer
+==========
+
+:hidden:`TokenizerBase`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.TokenizerBase
+    :members:
+
+:hidden:`SentencePieceTokenizer`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.SentencePieceTokenizer
+    :members:
+
+:hidden:`BERTTokenizer`
+~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.BERTTokenizer
+    :members:
+
+:hidden:`GPT2Tokenizer`
+~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.GPT2Tokenizer
+    :members:
+
+:hidden:`RoBERTaTokenizer`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.RoBERTaTokenizer
+    :members:
+
+:hidden:`XLNetTokenizer`
+~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.XLNetTokenizer
+    :members:
+
 Vocabulary
 ==========
 
 :hidden:`SpecialTokens`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.SpecialTokens
+.. autoclass:: texar.torch.data.SpecialTokens
     :members:
 
 :hidden:`Vocab`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.Vocab
+.. autoclass:: texar.torch.data.Vocab
     :members:
 
 :hidden:`map_ids_to_strs`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. autofunction:: texar.data.map_ids_to_strs
+.. autofunction:: texar.torch.data.map_ids_to_strs
 
 Embedding
 ==========
@@ -31,89 +62,127 @@ Embedding
 
 :hidden:`Embedding`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.Embedding
+.. autoclass:: texar.torch.data.Embedding
     :members:
 
 :hidden:`load_word2vec`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-.. autofunction:: texar.data.load_word2vec
+.. autofunction:: texar.torch.data.load_word2vec
 
 :hidden:`load_glove`
 ~~~~~~~~~~~~~~~~~~~~~~~~
+.. autofunction:: texar.torch.data.load_glove
 
-.. autofunction:: texar.data.load_glove
 
-Data
-==========
+Data Sources
+==============
+
+:hidden:`DataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.DataSource
+    :members:
+
+:hidden:`SequenceDataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.SequenceDataSource
+    :members:
+
+:hidden:`IterDataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.IterDataSource
+    :members:
+
+:hidden:`ZipDataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.ZipDataSource
+    :members:
+
+:hidden:`FilterDataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.FilterDataSource
+    :members:
+
+:hidden:`RecordDataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.RecordDataSource
+    :members:
+
+:hidden:`TextLineDataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.TextLineDataSource
+    :members:
+
+:hidden:`PickleDataSource`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.PickleDataSource
+    :members:
+
+
+
+Data Loaders
+=============
 
 :hidden:`DataBase`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.DataBase
+.. autoclass:: texar.torch.data.DataBase
     :members:
 
     .. automethod:: process
-
     .. automethod:: collate
 
 :hidden:`MonoTextData`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.MonoTextData
+.. autoclass:: texar.torch.data.MonoTextData
     :members:
-    :inherited-members:
-    :exclude-members: make_vocab,make_embedding
+    :exclude-members: make_vocab,make_embedding,process,collate
 
 :hidden:`PairedTextData`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.PairedTextData
+.. autoclass:: texar.torch.data.PairedTextData
     :members:
-    :inherited-members:
-    :exclude-members: make_vocab,make_embedding
+    :exclude-members: make_vocab,make_embedding,process,collate
 
 :hidden:`ScalarData`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.ScalarData
+.. autoclass:: texar.torch.data.ScalarData
     :members:
-    :inherited-members:
+    :exclude-members: process,collate
 
 :hidden:`MultiAlignedData`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.MultiAlignedData
+.. autoclass:: texar.torch.data.MultiAlignedData
     :members:
-    :inherited-members:
+    :exclude-members: make_vocab,make_embedding,process,collate,to
+
+:hidden:`RecordData`
+~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: texar.torch.data.RecordData
+    :members:
+    :exclude-members: process,collate
 
 Data Iterators
 ===============
 
 :hidden:`DataIterator`
 ~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.DataIterator
+.. autoclass:: texar.torch.data.DataIterator
     :members:
 
 :hidden:`TrainTestDataIterator`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.TrainTestDataIterator
+.. autoclass:: texar.torch.data.TrainTestDataIterator
     :members:
 
 :hidden:`BatchingStrategy`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.BatchingStrategy
+.. autoclass:: texar.torch.data.BatchingStrategy
     :members:
 
 :hidden:`TokenCountBatchingStrategy`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: texar.data.TokenCountBatchingStrategy
+.. autoclass:: texar.torch.data.TokenCountBatchingStrategy
     :members:
-
+    :exclude-members: reset_batch,add_example
 
 
 Data Utilities
@@ -121,16 +190,16 @@ Data Utilities
 
 :hidden:`maybe_download`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. autofunction:: texar.data.maybe_download
+.. autofunction:: texar.torch.data.maybe_download
 
 :hidden:`read_words`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. autofunction:: texar.data.read_words
+.. autofunction:: texar.torch.data.read_words
 
 :hidden:`make_vocab`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. autofunction:: texar.data.make_vocab
+.. autofunction:: texar.torch.data.make_vocab
 
 :hidden:`count_file_lines`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-.. autofunction:: texar.data.count_file_lines
+.. autofunction:: texar.torch.data.count_file_lines

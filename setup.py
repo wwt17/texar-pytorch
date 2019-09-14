@@ -1,7 +1,7 @@
 import sys
 import setuptools
 
-long_description = '''
+long_description = """
 Texar-PyTorch is an open-source toolkit based on PyTorch,
 aiming to support a broad set of machine learning especially text generation
 tasks, such as machine translation, dialog, summarization, content manipulation,
@@ -10,13 +10,13 @@ language modeling, and so on.
 Texar is designed for both researchers and practitioners for fast prototyping
 and experimentation. Checkout https://github.com/asyml/texar for the TensorFlow
 version which has the same functionalities and (mostly) the same interfaces.
-'''
+"""
 
 if sys.version_info < (3, 6):
     sys.exit('Python>=3.6 is required by Texar-PyTorch.')
 
 setuptools.setup(
-    name="texar",
+    name="texar-pytorch",
     version="0.0.1",
     url="https://github.com/asyml/texar-pytorch",
 
@@ -24,14 +24,18 @@ setuptools.setup(
     long_description=long_description,
     license='Apache License Version 2.0',
 
-    packages=setuptools.find_packages(),
+    packages=[
+        f"texar.{name}"
+        for name in setuptools.find_packages(where='texar/')
+    ],
     platforms='any',
 
     install_requires=[
+        'regex>=2018.01.10',
         'numpy',
-        'pyyaml',
         'requests',
         'funcsigs',
+        'sentencepiece>=0.1.8',
         'mypy_extensions',
     ],
     extras_require={
@@ -40,8 +44,8 @@ setuptools.setup(
         'extras': ['Pillow>=3.0'],
     },
     package_data={
-        "texar": [
-            "../bin/utils/multi-bleu.perl",
+        "texar.torch": [
+            "../../bin/utils/multi-bleu.perl",
         ]
     },
     classifiers=[

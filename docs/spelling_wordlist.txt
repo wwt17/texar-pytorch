@@ -57,3 +57,10 @@ torch
 fastly
 CUDA
 precompute
+Tokenize
+Regressor
+regressor
+mixin
+tokenizer
+wordpiece
+unigram

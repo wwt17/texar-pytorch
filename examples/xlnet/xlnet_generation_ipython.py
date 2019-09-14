@@ -1,8 +1,22 @@
-import torch
-import sentencepiece as spm
+# Copyright 2019 The Texar Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Example of building XLNet language model for sample generation.
+"""
 
-import xlnet
-import xlnet.model.decoder
+import torch
+
+import texar.torch as tx
 
 
 def main():
@@ -11,13 +25,11 @@ def main():
     else:
         device = 'cpu'
 
-    model = xlnet.model.decoder.XLNetDecoder()
-    xlnet.model.load_from_tf_checkpoint(
-        model, "pretrained/xlnet_cased_L-24_H-1024_A-16/xlnet_model.ckpt")
+    model = tx.modules.XLNetDecoder(pretrained_model_name='xlnet-large-cased')
     model = model.to(device)
-    sp_model = spm.SentencePieceProcessor()
-    sp_model.Load("pretrained/xlnet_cased_L-24_H-1024_A-16/spiece.model")
-    tokenize_fn = xlnet.data.create_tokenize_fn(sp_model, False)
+
+    tokenizer = tx.data.XLNetTokenizer(
+        pretrained_model_name='xlnet-large-cased')
 
     # A lengthy padding text used to workaround lack of context for short
     # prompts. Refer to https://github.com/rusiaaman/XLNet-gen for the rationale
@@ -34,10 +46,17 @@ def main():
         and methodologies, creates a library of highly reusable modules and
         functionalities, and facilitates arbitrary model architectures and
         algorithmic paradigms. """
-    pad_ids = tokenize_fn(pad_txt)
-    pad_ids.append(xlnet.data.utils.EOD_ID)
+    pad_ids = tokenizer.map_text_to_id(pad_txt)
+    eod_id = tokenizer.map_token_to_id("<eod>")
+    pad_ids.append(eod_id)
 
     def split_by(xs, y):
+        r"""Splits list `xs` by value `y`.
+
+        Example:
+            list(split_by([1,2,4,5,6,4,7,4], 4))
+            # [[1, 2], [5, 6], [7]]
+        """
         p = 0
         for idx, x in enumerate(xs):
             if x == y:
@@ -53,16 +72,18 @@ def main():
         print(text)
         model.eval()
         text = text.replace("\n", "<eop>")
-        tokens = pad_ids + tokenize_fn(text)
+        tokens = pad_ids + tokenizer.map_text_to_id(text)
         tokens = torch.tensor(tokens, device=device).expand(n_samples, -1)
         kwargs.setdefault("print_steps", True)
-        decode_output, _ = model(
-            tokens, max_decoding_length=length, **kwargs)
+        decode_output, _ = model(start_tokens=tokens,
+                                 end_token=eod_id,
+                                 max_decoding_length=length,
+                                 **kwargs)
         decode_samples = decode_output.sample_id.tolist()
         for idx, sample_tokens in enumerate(decode_samples):
             print(f"=== Sample {idx} ===")
-            output = "\n".join(sp_model.DecodeIds(xs) for xs in split_by(
-                sample_tokens, xlnet.data.utils.special_symbols["<eop>"]))
+            output = "\n".join(tokenizer.map_id_to_text(xs) for xs in split_by(
+                sample_tokens, tokenizer.map_token_to_id("<eop>")))
             print(output)
 
     try:
